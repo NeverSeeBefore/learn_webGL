@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>矩形绘制</title>
+</head>
+
+<body>
+    <canvas width="500px" height="500px" id="oCanvas"></canvas>
+    <script>
+        var oCanvas = document.getElementById('oCanvas');
+        // 1. 获取上线文对象
+        // experimental-webgl  / webgl
+        var gl = oCanvas.getContext('webgl');
+        // 2. 初始化着色器
+
+        // 2.1 初始化顶点着色器和片元着色器 代码
+        var vertexStr = `
+            attribute vec2 a_position;
+            attribute vec4 a_color;
+            uniform vec2 screenSize;
+            varying vec4 v_color;
+            void main () {
+                float x = a_position.x * 2.0 / screenSize.x - 1.0;
+                float y = 1.0 - a_position.y * 2.0 / screenSize.y;
+                gl_Position = vec4(x, y, 0, 1);
+                gl_PointSize = 10.0;
+                v_color = a_color;
+            }`;
+        var fragmentStr = `
+            precision mediump float;
+            varying vec4 v_color;
+            void main () {
+                gl_FragColor = v_color;
+            }`;
+        // 2.2 创建着色器
+        var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexStr)
+        var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentStr)
+
+        // 2.3 创建着色器程序
+        var program = createProgram(gl, vertexShader, fragmentShader);
+
+        gl.useProgram(program);
+        // 3. 绘制图形
+
+        var a_position = gl.getAttribLocation(program, 'a_position');
+        var a_color = gl.getAttribLocation(program, 'a_color');
+        var screenSize = gl.getUniformLocation(program, 'screenSize');
+        gl.uniform2f(screenSize, oCanvas.width, oCanvas.height);
+        // gl.vertexAttrib4f(a_color, 0, 0, 1, 1);
+
+        // 01 创建缓冲区
+        var positionBuffer = gl.createBuffer();
+        console.log(positionBuffer);
+        var indexBuffer = gl.createBuffer();
+        // 02 绑定缓冲区
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        // 03 设置缓冲区数据
+        gl.bufferData(
+            gl.ARRAY_BUFFER,
+            new Float32Array([
+                // 50, 50,
+                // 50, 100,
+                // 150, 100,
+                // 150, 100,
+                // 150, 50,
+                // 50, 50,
+                50, 50, 1,0,0,
+                50, 100, 0,1,0,
+                150, 100, 0,0,1,
+                150, 50, 1,1,0
+            ]),
+            gl.STATIC_DRAW
+        );
+        gl.bufferData(
+            gl.ELEMENT_ARRAY_BUFFER,
+            new Uint16Array([
+                0,1,2,
+                2,3,0
+            ]),
+            gl.STATIC_DRAW
+        );
+        // 04 设置属性取值方式
+        // 位置， 每个顶点的分量个数， 数据类型， 是否归一化， 两个顶点间的字节数， 偏移量
+        gl.vertexAttribPointer(a_position, 2, gl.FLOAT, false, 4 * 5, 0);
+        gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 4 * 5, 4 * 2);
+        // 05 启用属性从缓冲区中取值
+        gl.enableVertexAttribArray(a_position);
+        gl.enableVertexAttribArray(a_color);
+        // 06 绘制
+        // gl.drawArrays(gl.TRIANGLES, 0, 6);
+        // mode 图形类型  count 绘制图形的顶点数  type 缓冲区中值的类型  offset 指定索引开始的位置
+        gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+        // gl.drawElements(gl.TRIANGLE_STRIP, 6, gl.UNSIGNED_SHORT, 0);
+
+        // 可以用 三角形 TRIANGLES、三角形带 TRIANGLE_STRIP、三角形扇 TRIANGLE_FAN 绘制 长方形
+
+        // drawArrays 使用 ARRAY_BUFFER 的数据 绘图
+        // drawElements 使用 ELEMENT_ARRAY_BUFFER 记录的索引，在ARRAY_BUFFER摘到对应点的数据 进行绘图
+        // ARRAY_BUFFER 存的是点数据
+        // ELEMENT_ARRAY_BUFFER 存的是 对于ARRAY_BUFFER的索引，
+
+
+        function createShader(gl, type, source) {
+            // 创建着色器
+            var shader = gl.createShader(type);
+            // 想着色器中添加资源
+            gl.shaderSource(shader, source);
+            // 编译资源
+            gl.compileShader(shader);
+            var success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+            if (!success) {
+                console.log('创建着色器失败', success, gl.getShaderInfoLog(shader));
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vertexShader, fragmentShader) {
+            // 创建程序
+            var program = gl.createProgram();
+            // 绑定着色器
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            // 连接着色器程序
+            gl.linkProgram(program);
+            var success = gl.getProgramParameter(program, gl.LINK_STATUS);
+            if (!success) {
+                console.log('创建程序失败', success, gl.getProgramInfoLog(program));
+            }
+            return program;
+        }
+
+
+
+
+
+
+
+
+
+        // 着色器语言 参考
+        // https://blog.csdn.net/a1203991686/article/details/102614961
+        // https://blog.csdn.net/qq_41741576/article/details/89883301
+        // https://blog.csdn.net/qq_41741576/article/details/90482510
+
+    </script>
+</body>
+
+</html>
