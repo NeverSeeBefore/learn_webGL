@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>一个矩阵进行复合变换</title>
+</head>
+
+<body>
+    <canvas width="500px" height="500px" id="oCanvas"></canvas>
+    <script>
+        var oCanvas = document.getElementById('oCanvas');
+        // 1. 获取上线文对象
+        // experimental-webgl  / webgl
+        var gl = oCanvas.getContext('webgl');
+        // 2. 初始化着色器
+
+        // 2.1 初始化顶点着色器和片元着色器 代码
+        var vertexStr = `
+        attribute vec4 a_position;
+            attribute vec4 a_color;
+            /* u_rotateMatrix * u_translateMatrix * u_scaleMatrix 的乘积 被称为模型矩阵 */
+            uniform mat4 u_moduleMatrix;
+            varying vec4 v_color;
+            void main () {
+                gl_Position = u_moduleMatrix * a_position;
+                // gl_Position = a_position;
+                v_color = a_color;
+            }`;
+        var fragmentStr = `
+            precision mediump float;
+            varying vec4 v_color;
+            void main () {
+                gl_FragColor = v_color;
+            }`;
+        // 2.2 创建着色器
+        var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexStr)
+        var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentStr)
+
+        // 2.3 创建着色器程序
+        var program = createProgram(gl, vertexShader, fragmentShader);
+
+        gl.useProgram(program);
+        // 3. 绘制图形
+
+        var a_position = gl.getAttribLocation(program, 'a_position');
+        var a_color = gl.getAttribLocation(program, 'a_color');
+        var u_moduleMatrix = gl.getUniformLocation(program, 'u_moduleMatrix');
+
+
+        var MATRIX = {
+            // 返回的都是转置后的矩阵
+            translate: function (tx, ty, tz) {
+                return [
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    tx, ty, tz, 1
+                ];
+            },
+            rotateZ: function (deg) {
+                var sinb = Math.sin(deg * Math.PI / 180);
+                var cosb = Math.cos(deg * Math.PI / 180);
+                return [
+                    cosb, sinb, 0.0, 0.0,
+                    -sinb, cosb, 0.0, 0.0,
+                    0.0, 0.0, 1.0, 0.0,
+                    0.0, 0.0, 0.0, 1.0
+                ];
+            },
+            scale: function (sx, sy, sz) {
+                return [
+                    sx, 0, 0, 0,
+                    0, sy, 0, 0,
+                    0, 0, sz, 0,
+                    0, 0, 0, 1
+                ];
+            },
+            // 参数 都是转置后的矩阵
+            getModuleMatrix: function (translateMatrix, rotateMatrix, scaleMatrix) {
+                const defaultMatrix = [
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
+                ];
+                translateMatrix = translateMatrix || defaultMatrix;
+                rotateMatrix = rotateMatrix || defaultMatrix;
+                scaleMatrix = scaleMatrix || defaultMatrix;
+                // 公式
+                // (rotateMatrix * translateMatrix * scaleMatrix)' = scaleMatrix' * translateMatrix' * rotateMatrix';
+
+                // return [
+                //     s00 * t00 + s01 * t01 + ,
+                //     s00 * t01
+                // ]
+            },
+            // 任意数量 四阶矩阵
+            multiplyMatrix() {
+                var args = Array.from(arguments);
+                function _multiplyMatrix(a, b) {
+                    var a11 = a[4 * 0 + 0];
+                    var a12 = a[4 * 0 + 1];
+                    var a13 = a[4 * 0 + 2];
+                    var a14 = a[4 * 0 + 3];
+
+                    var a21 = a[4 * 1 + 0];
+                    var a22 = a[4 * 1 + 1];
+                    var a23 = a[4 * 1 + 2];
+                    var a24 = a[4 * 1 + 3];
+
+                    var a31 = a[4 * 2 + 0];
+                    var a32 = a[4 * 2 + 1];
+                    var a33 = a[4 * 2 + 2];
+                    var a34 = a[4 * 2 + 3];
+
+                    var a41 = a[4 * 3 + 0];
+                    var a42 = a[4 * 3 + 1];
+                    var a43 = a[4 * 3 + 2];
+                    var a44 = a[4 * 3 + 3];
+
+
+                    var b11 = b[4 * 0 + 0];
+                    var b12 = b[4 * 0 + 1];
+                    var b13 = b[4 * 0 + 2];
+                    var b14 = b[4 * 0 + 3];
+
+                    var b21 = b[4 * 1 + 0];
+                    var b22 = b[4 * 1 + 1];
+                    var b23 = b[4 * 1 + 2];
+                    var b24 = b[4 * 1 + 3];
+
+                    var b31 = b[4 * 2 + 0];
+                    var b32 = b[4 * 2 + 1];
+                    var b33 = b[4 * 2 + 2];
+                    var b34 = b[4 * 2 + 3];
+
+                    var b41 = b[4 * 3 + 0];
+                    var b42 = b[4 * 3 + 1];
+                    var b43 = b[4 * 3 + 2];
+                    var b44 = b[4 * 3 + 3];
+
+                    return [
+                        a11 * b11 + a12 * b21 + a13 * b31 + a14 * b41,
+                        a11 * b12 + a12 * b22 + a13 * b32 + a14 * b42,
+                        a11 * b13 + a12 * b23 + a13 * b33 + a14 * b43,
+                        a11 * b14 + a12 * b24 + a13 * b34 + a14 * b44,
+
+                        a21 * b11 + a22 * b21 + a23 * b31 + a24 * b41,
+                        a21 * b12 + a22 * b22 + a23 * b32 + a24 * b42,
+                        a21 * b13 + a22 * b23 + a23 * b33 + a24 * b43,
+                        a21 * b14 + a22 * b24 + a23 * b34 + a24 * b44,
+
+                        a31 * b11 + a32 * b21 + a33 * b31 + a34 * b41,
+                        a31 * b12 + a32 * b22 + a33 * b32 + a34 * b42,
+                        a31 * b13 + a32 * b23 + a33 * b33 + a34 * b43,
+                        a31 * b14 + a32 * b24 + a33 * b34 + a34 * b44,
+
+                        a41 * b11 + a42 * b21 + a43 * b31 + a44 * b41,
+                        a41 * b12 + a42 * b22 + a43 * b32 + a44 * b42,
+                        a41 * b13 + a42 * b23 + a43 * b33 + a44 * b43,
+                        a41 * b14 + a42 * b24 + a43 * b34 + a44 * b44,
+                    ]
+                }
+                return args.reduce(
+                    _multiplyMatrix,
+                    [
+                        1, 0, 0, 0,
+                        0, 1, 0, 0,
+                        0, 0, 1, 0,
+                        0, 0, 0, 1
+                    ]
+                );
+            }
+        }
+
+
+        gl.uniformMatrix4fv(u_moduleMatrix, false, new Float32Array(
+            [
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1
+            ]
+        ))
+        // 01 创建缓冲区
+        var positionBuffer = gl.createBuffer();
+        var indexBuffer = gl.createBuffer();
+
+        // 02 绑定缓冲区
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+
+        // 03 设置缓冲区数据
+        gl.bufferData(
+            gl.ARRAY_BUFFER,
+            new Float32Array([
+                -0.5, 0.5, 0, 1, 1, 0,
+                -0.5, -0.5, 0, 0, 0, 1,
+                0.5, -0.5, 0, 1, 0, 1,
+                -0.5, 0.5, 0, 0, 0, 1,
+                0.5, -0.5, 0, 1, 0, 1,
+                0.5, 0.5, 0, 1, 0, 1,
+            ]),
+            gl.STATIC_DRAW
+        );
+        gl.bufferData(
+            gl.ELEMENT_ARRAY_BUFFER,
+            new Uint16Array([
+            ]),
+            gl.STATIC_DRAW
+        );
+
+        // 04 设置属性取值方式
+        // 位置， 每个顶点的分量个数， 数据类型， 是否归一化， 两个顶点间的字节数， 偏移量
+        gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 4 * 6, 0);
+        gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 4 * 6, 4 * 3);
+
+        // 05 启用属性从缓冲区中取值
+        gl.enableVertexAttribArray(a_position);
+        gl.enableVertexAttribArray(a_color);
+
+        // 06 绘制
+        gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+        function draw() {
+            gl.clearColor(1, 1, 1, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.uniformMatrix4fv(u_moduleMatrix, false, new Float32Array(
+                MATRIX.multiplyMatrix(
+                    MATRIX.scale(.3, .3, 1),
+                    MATRIX.translate(1, 0, 0),
+                    MATRIX.rotateZ(45),
+                    MATRIX.scale(.5, .5, 1),
+                )
+            ))
+            gl.drawArrays(gl.TRIANGLES, 0, 6);
+        }
+        draw();
+
+        // console.log(MATRIX.multiplyMatrix(
+        //     [
+        //         0, 0, 0, 0,
+        //         0, 0, 0, 0,
+        //         0, 0, 0, 0,
+        //         1, 1, 1, 1,
+        //     ],
+        //     [
+        //         0, 0, 0, 1,
+        //         0, 0, 0, 1,
+        //         0, 0, 0, 1,
+        //         0, 0, 0, 1,
+        //     ],
+        // ))
+
+
+
+
+        function createShader(gl, type, source) {
+            // 创建着色器
+            var shader = gl.createShader(type);
+            // 想着色器中添加资源
+            gl.shaderSource(shader, source);
+            // 编译资源
+            gl.compileShader(shader);
+            var success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+            if (!success) {
+                console.log('创建着色器失败', success, gl.getShaderInfoLog(shader));
+            }
+            return shader;
+        }
+
+        function createProgram(gl, vertexShader, fragmentShader) {
+            // 创建程序
+            var program = gl.createProgram();
+            // 绑定着色器
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            // 连接着色器程序
+            gl.linkProgram(program);
+            var success = gl.getProgramParameter(program, gl.LINK_STATUS);
+            if (!success) {
+                console.log('创建程序失败', success, gl.getProgramInfoLog(program));
+            }
+            return program;
+        }
+
+
+
+
+
+
+
+
+        // sin(a + b) = sin(a)cos(b) + cos(a)sin(b);
+        // sin(a - b) = sin(a)cos(b) - cos(a)sin(b);
+        // cos(a + b) = cos(a)cos(b) - sin(a)sin(b);
+        // cos(a - b) = cos(a)cos(b) + sin(a)sin(b);
+
+        // 旋转矩阵 由三角函数推理得来
+        // {        {                       {
+        // x'       cosB    -sinB   0       x
+        // y'   =   sinB    cosB    0   *   y
+        // z'       0       0       1       z
+        // }        }                       }
+
+        // 平移矩阵
+        // {        {                       {
+        // x'       1    0   0  TX       x
+        // y'   =   0    1   0  TY   *   y
+        // z'       0    0   1  TZ       z
+        // }        }                       }
+
+        // 缩放矩阵
+        // {        {                       {
+        // x'       SX   0   0       x
+        // y'   =   0    SY  0   *   y
+        // z'       0    0   SZ      z
+        // }        }                       }
+    </script>
+</body>
+
+</html>
