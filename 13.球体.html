@@ -4,49 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>立方体</title>
+    <title>球体</title>
 </head>
 
 <body>
     <canvas width="500px" height="500px" id="oCanvas"></canvas>
     <script>
-        var oCanvas = document.getElementById('oCanvas');
-        // 1. 获取上线文对象
-        // experimental-webgl  / webgl
-        var gl = oCanvas.getContext('webgl');
-        // 2. 初始化着色器
-
-        // 2.1 初始化顶点着色器和片元着色器 代码
-        var vertexStr = `
-        attribute vec4 a_position;
-            attribute vec4 a_color;
-            /* u_rotateMatrix * u_translateMatrix * u_scaleMatrix 的乘积 被称为模型矩阵 */
-            uniform mat4 u_moduleMatrix;
-            varying vec4 v_color;
-            void main () {
-                gl_Position = u_moduleMatrix * a_position;
-                // gl_Position = a_position;
-                v_color = a_color;
-            }`;
-        var fragmentStr = `
-            precision mediump float;
-            varying vec4 v_color;
-            void main () {
-                gl_FragColor = v_color;
-            }`;
-        // 2.2 创建着色器
-        var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexStr)
-        var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentStr)
-
-        // 2.3 创建着色器程序
-        var program = createProgram(gl, vertexShader, fragmentShader);
-
-        gl.useProgram(program);
-        // 3. 绘制图形
-
-        var a_position = gl.getAttribLocation(program, 'a_position');
-        var a_color = gl.getAttribLocation(program, 'a_color');
-        var u_moduleMatrix = gl.getUniformLocation(program, 'u_moduleMatrix');
 
 
         var MATRIX = {
@@ -67,6 +30,26 @@
                     -sinb, cosb, 0.0, 0.0,
                     0.0, 0.0, 1.0, 0.0,
                     0.0, 0.0, 0.0, 1.0
+                ];
+            },
+            rotateX: function (deg) {
+                var sin = Math.sin(deg * Math.PI / 180)
+                var cos = Math.cos(deg * Math.PI / 180)
+                return [
+                    1, 0, 0, 0,
+                    0, cos, sin, 0,
+                    0, -sin, cos, 0,
+                    0, 0, 0, 1
+                ];
+            },
+            rotateY: function (deg) {
+                var sin = Math.sin(deg * Math.PI / 180)
+                var cos = Math.cos(deg * Math.PI / 180)
+                return [
+                    cos, 0, -sin, 0,
+                    0, 1, 0, 0,
+                    sin, 0, cos, 0,
+                    0, 0, 0, 1,
                 ];
             },
             scale: function (sx, sy, sz) {
@@ -173,16 +156,49 @@
                     ]
                 );
             }
-        }
+        };
 
+
+        var oCanvas = document.getElementById('oCanvas');
+        // 1. 获取上线文对象
+        // experimental-webgl  / webgl
+        var gl = oCanvas.getContext('webgl');
+        // 2. 初始化着色器
+
+        // 2.1 初始化顶点着色器和片元着色器 代码
+        var vertexStr = `
+            attribute vec3 a_position;
+            attribute vec4 a_color;
+            varying vec4 v_color;
+            uniform mat4 u_moduleMatrix;
+            void main () {
+                gl_Position = u_moduleMatrix * vec4(a_position, 1);
+                v_color = a_color;
+            }`;
+        var fragmentStr = `
+            precision mediump float;
+            varying vec4 v_color;
+            void main () {
+                gl_FragColor = v_color;
+            }`;
+        // 2.2 创建着色器
+        var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexStr)
+        var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentStr)
+
+        // 2.3 创建着色器程序
+        var program = createProgram(gl, vertexShader, fragmentShader);
+
+        gl.useProgram(program);
+        // 3. 绘制图形
+
+        var a_position = gl.getAttribLocation(program, 'a_position');
+        var a_color = gl.getAttribLocation(program, 'a_color');
+        var u_moduleMatrix = gl.getUniformLocation(program, 'u_moduleMatrix');
 
         gl.uniformMatrix4fv(u_moduleMatrix, false, new Float32Array(
-            [
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
-                0, 0, 0, 1
-            ]
+            MATRIX.multiplyMatrix(
+                MATRIX.rotateZ(0)
+            )
         ))
         // 01 创建缓冲区
         var positionBuffer = gl.createBuffer();
@@ -191,70 +207,88 @@
         // 02 绑定缓冲区
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.enable(gl.DEPTH_TEST);
 
+        // squareRadius 球半径      circleCount 横向分多少个面， triangleCount 每个面分多少三角形
+        function createSquare(squareRadius, circleCount, triangleCount) {
+
+            var circleAngle = Math.PI / circleCount;
+            var triangleAngle = Math.PI * 2 / triangleCount;
+            var positionData = [];
+            for (var i = 0; i <= circleCount; i++) {
+                var y = squareRadius * Math.cos(circleAngle * i);
+                var radius = squareRadius * Math.sin(circleAngle * i);
+                for (var j = 0; j <= triangleCount; j++) {
+                    var x = radius * Math.cos(triangleAngle * j);
+                    var z = radius * Math.sin(triangleAngle * j);
+                    // console.log(x, z, triangleAngle)
+                    positionData.push(x, y, z, Math.random(), Math.random(), Math.random());
+                }
+            }
+            var indexData = [];
+            for (var i = 0; i < circleCount; i++) {
+                for (var j = 0; j < triangleCount; j++) {
+                    var v0 = i * (triangleCount + 1) + j;
+                    var v1 = (i + 1) * (triangleCount + 1) + j;
+                    var v2 = (i + 1) * (triangleCount + 1) + j + 1;
+                    var v3 = i * (triangleCount + 1) + j + 1;
+                    indexData.push(
+                        v0, v1, v2,
+                        v2, v3, v0
+                    );
+                }
+            }
+            return { position: positionData, index: indexData };
+        }
+        var square = createSquare(0.5, 4, 8);
+        // var square = createSquare(0.5, 50, 50);
+        console.log(square);
         // 03 设置缓冲区数据
         gl.bufferData(
             gl.ARRAY_BUFFER,
-            new Float32Array([
-                -0.5, 0.5, 0, 1, 1, 0,
-                -0.5, -0.5, 0, 0, 0, 1,
-                0.5, -0.5, 0, 1, 0, 1,
-                -0.5, 0.5, 0, 0, 0, 1,
-                0.5, -0.5, 0, 1, 0, 1,
-                0.5, 0.5, 0, 1, 0, 1,
-            ]),
+            new Float32Array(square.position),
             gl.STATIC_DRAW
         );
         gl.bufferData(
             gl.ELEMENT_ARRAY_BUFFER,
-            new Uint16Array([
-            ]),
+            new Uint16Array(square.index),
             gl.STATIC_DRAW
         );
 
         // 04 设置属性取值方式
         // 位置， 每个顶点的分量个数， 数据类型， 是否归一化， 两个顶点间的字节数， 偏移量
-        gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 4 * 6, 0);
+        gl.vertexAttribPointer(a_position, 3, gl.FLOAT, false, 4 * 6, 0 + 4 * 6 * 0);
         gl.vertexAttribPointer(a_color, 3, gl.FLOAT, false, 4 * 6, 4 * 3);
+
 
         // 05 启用属性从缓冲区中取值
         gl.enableVertexAttribArray(a_position);
         gl.enableVertexAttribArray(a_color);
 
         // 06 绘制
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
+        // gl.drawArrays(gl.TRIANGLE_STRIP, 0, 24);
+        gl.drawElements(gl.TRIANGLE_STRIP, square.index.length, gl.UNSIGNED_SHORT, 0);
 
-        function draw() {
+        function draw(deg) {
             gl.clearColor(1, 1, 1, 1);
             gl.clear(gl.COLOR_BUFFER_BIT);
             gl.uniformMatrix4fv(u_moduleMatrix, false, new Float32Array(
                 MATRIX.multiplyMatrix(
-                    MATRIX.scale(.3, .3, 1),
-                    MATRIX.translate(1, 0, 0),
-                    MATRIX.rotateZ(45),
-                    MATRIX.scale(.5, .5, 1),
+                    MATRIX.rotateX(deg),
+                    MATRIX.rotateY(deg / 2),
+                    MATRIX.rotateZ(deg / 2),
                 )
             ))
-            gl.drawArrays(gl.TRIANGLES, 0, 6);
+            gl.drawElements(gl.TRIANGLES, square.index.length, gl.UNSIGNED_SHORT, 0);
+
         }
-        draw();
 
-        // console.log(MATRIX.multiplyMatrix(
-        //     [
-        //         0, 0, 0, 0,
-        //         0, 0, 0, 0,
-        //         0, 0, 0, 0,
-        //         1, 1, 1, 1,
-        //     ],
-        //     [
-        //         0, 0, 0, 1,
-        //         0, 0, 0, 1,
-        //         0, 0, 0, 1,
-        //         0, 0, 0, 1,
-        //     ],
-        // ))
-
-
+        var deg = 0;
+        setInterval(() => {
+            deg += 6;
+            draw(deg);
+            // console.log(deg);
+        }, 50);
 
 
         function createShader(gl, type, source) {
@@ -286,38 +320,6 @@
             return program;
         }
 
-
-
-
-
-
-
-
-        // sin(a + b) = sin(a)cos(b) + cos(a)sin(b);
-        // sin(a - b) = sin(a)cos(b) - cos(a)sin(b);
-        // cos(a + b) = cos(a)cos(b) - sin(a)sin(b);
-        // cos(a - b) = cos(a)cos(b) + sin(a)sin(b);
-
-        // 旋转矩阵 由三角函数推理得来
-        // {        {                       {
-        // x'       cosB    -sinB   0       x
-        // y'   =   sinB    cosB    0   *   y
-        // z'       0       0       1       z
-        // }        }                       }
-
-        // 平移矩阵
-        // {        {                       {
-        // x'       1    0   0  TX       x
-        // y'   =   0    1   0  TY   *   y
-        // z'       0    0   1  TZ       z
-        // }        }                       }
-
-        // 缩放矩阵
-        // {        {                       {
-        // x'       SX   0   0       x
-        // y'   =   0    SY  0   *   y
-        // z'       0    0   SZ      z
-        // }        }                       }
     </script>
 </body>
 
